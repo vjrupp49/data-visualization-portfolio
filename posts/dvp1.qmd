@@ -1,0 +1,42 @@
+---
+title: "Housing Prices and Square Footage"
+author: "Vincent Rupp"
+date: "2026-04-01"
+format:
+  html: default
+---
+
+```{r}
+library(tidyverse)
+library(sf)
+library(ggplot2)
+```
+
+## Visualization 1: Housing Prices
+
+This visualization shows the relationship between square footage and price of houses in the ZIP Code 53045. The original version was a simple scatter plot, which did show the relationship, but did not add any information that would not already be assumed.
+
+I wanted the graph to show a little bit more information while still being a simple and quick to understand graphic. I changed the plot to ggplot, fixed the labels, added color to represent age of home, and included a regression line to get a better understanding of the overall trend.
+
+```{r}
+zillow <- read_csv(here::here("posts", "DVP1", "day04", "zillow_sample.csv"))
+zillow |>
+  mutate(age = as.numeric(age)) |>
+  ggplot(aes(x = sqft, y = price, color = age)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", color = "black") +
+  scale_color_gradient(low = "white", high = "blue") +
+  scale_y_continuous(labels = scales::label_number(scale = 1e-3, suffix = "k")) +
+  labs(
+    title = "Housing Price vs. Square Feet in 53045",
+    subtitle = "Point color represents the age of the home",
+    x = "Square Feet",
+    y = "Price",
+    color = "Home Age",
+    caption = "Source: Zillow sample dataset"
+  ) +
+  theme_minimal()
+```
+
+The main things I wanted to change from the feedback received in class was that the visualization being technically correct is not all that matters, it also needs to show interesting information. My original plot showed that large homes usually cost more, but that relationship is an obvious one. I added home age as a color variable so that there is another layer of information. The regression line also makes the trend easier to quickly understand.
+

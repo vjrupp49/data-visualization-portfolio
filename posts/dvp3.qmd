@@ -1,0 +1,153 @@
+---
+title: "SNAP Enrollment Boxplots"
+author: "Vincent Rupp"
+date: "2026-04-12"
+format: html
+---
+
+## Visualization 2: SNAP Participation Gap by Municipality
+
+This visualization was a starter viz for our Hennepin County project. It looks at the SNAP/MFIP enrollment gap per census tract across cities in Hennepin County. It does not show the city level numbers, but the box plots rather show each census tract's enrollment gap within each city.The idea behind this visualization was to show that city-level data can hide important tract-level patterns. A city could have a gap rate that looks low, but it could contain individual census tracts that have quite high enrollment gaps. The boxplot helps us see the spread of enrollment gaps within each city instead of just 1 number for the whole city.
+
+I only included cities with at least 5 census tracts because the box plots would not be very useful for a city with just 1 or 2 tracts. This keeps the comparison more accurate and only shows cities with realistic numbers to look at.
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+
+### Libraries ###
+library(tidyverse)
+library(sf)
+library(ggplot2)
+
+### Load In Data ###
+snap_raw <- read_csv(here::here("posts", "DVP3", "scripts", "hennepin_snap_mfip_tract_reva.csv"))
+
+### Remove Garbage NA Rows ###
+snap_clean <- snap_raw |>
+  filter(!is.na(GEOID))
+
+### Remove Unneeded Columns ###
+snap_clean <- snap_clean |>
+  select(GEOID, NAME, YearMonth, SNAP_people, MFIP_people, p_125_povertyE)
+
+### Fix tract formatting ###
+snap_clean <- snap_clean |>
+  mutate(GEOID = sprintf("%011.0f", GEOID))
+
+### Create year and month variables ###
+snap_clean <- snap_clean |>
+  mutate(
+    year = YearMonth %/% 100,
+    month = YearMonth %% 100
+  )
+
+### Post-COVID Only ###
+snap_clean <- snap_clean |>
+  filter(year >= 2022, year <= 2025)
+
+### Convert to numbers, and clean low counts ###
+snap_clean <- snap_clean |>
+  mutate(
+    SNAP_people = na_if(SNAP_people, "Low count"),
+    MFIP_people = na_if(MFIP_people, "Low count"),
+    SNAP_people = as.numeric(SNAP_people),
+    MFIP_people = as.numeric(MFIP_people)
+  )
+
+### Combine SNAP and MFIP into 1 ###
+snap_clean <- snap_clean |>
+  mutate(
+    snap_mfip_people = coalesce(SNAP_people, 0) + coalesce(MFIP_people, 0)
+  )
+
+### Eligibility - Enrollment Gap Calculations ###
+snap_clean <- snap_clean |>
+  mutate(
+    eligible_125 = p_125_povertyE,
+    gap_count = eligible_125 - snap_mfip_people,
+    gap_count = if_else(gap_count < 0, 0, gap_count),
+    gap_rate  = if_else(eligible_125 > 0, gap_count / eligible_125, NA_real_)
+  )
+
+### Tract level Median from 2022-2025 ###
+tract_summary <- snap_clean |>
+  group_by(GEOID) |>
+  summarise(
+    median_gap_rate_2022_2025  = median(gap_rate, na.rm = TRUE),
+    median_gap_count_2022_2025 = median(gap_count, na.rm = TRUE),
+    n_months_used = sum(!is.na(gap_rate)),
+    .groups = "drop"
+  ) |>
+  filter(n_months_used > 0)
+
+municipalities <- st_read(
+  here::here("posts", "DVP3", "tl_2020_27_place", "tl_2020_27_place.shp"),
+  quiet = TRUE
+)
+
+tracts <- st_read(
+  here::here("posts", "DVP3", "tl_2020_27_tract", "tl_2020_27_tract.shp"),
+  quiet = TRUE
+)
+
+tracts <- tracts |>
+  filter(COUNTYFP == "053")
+
+tracts_with_data <- tracts |>
+  left_join(tract_summary, by = "GEOID")
+
+tract_centroids <- tracts_with_data |>
+  st_centroid()
+
+municipalities <- st_transform(municipalities, st_crs(tract_centroids))
+
+tract_muni <- st_join(
+  tract_centroids,
+  municipalities |> select(PLACEFP, NAME),
+  join = st_within
+)
+
+tract_muni <- tract_muni |>
+  rename(
+    tract_name = NAME.x,
+    municipality = NAME.y
+  ) |>
+  mutate(
+    municipality = if_else(is.na(municipality), "unassigned", municipality)
+  )
+
+municipality_summary <- tract_muni |>
+  st_drop_geometry() |>
+  group_by(municipality) |>
+  summarise(
+    n_tracts = n(),
+    median_gap = median(median_gap_rate_2022_2025, na.rm = TRUE),
+    mean_gap = mean(median_gap_rate_2022_2025, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+```{r}
+tract_muni |>
+  st_drop_geometry() |>
+  inner_join(municipality_summary, by = "municipality") |>
+  filter(n_tracts >= 5) |>
+  ggplot(aes(
+    x = reorder(municipality, median_gap_rate_2022_2025, median, na.rm = TRUE),
+    y = median_gap_rate_2022_2025
+  )) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Distribution of SNAP Participation Gaps by Municipality",
+    subtitle = "Each boxplot shows tract-level variation within a municipality",
+    x = "Municipality",
+    y = "Median Participation Gap, 2022–2025",
+    caption = "Source: Hennepin County SNAP/MFIP tract estimates"
+  ) +
+  theme_minimal()
+
+```

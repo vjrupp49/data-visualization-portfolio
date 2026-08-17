@@ -1,0 +1,11 @@
+---
+title: "Welcome To My Blog"
+author: "Vincent Rupp"
+date: "2026-03-22"
+categories: [news]
+---
+
+This is the first post in my Quarto blog. Welcome!
+
+
+![](thumbnail.jpg)
