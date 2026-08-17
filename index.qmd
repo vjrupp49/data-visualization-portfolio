@@ -1,0 +1,22 @@
+---
+title: "Vincent Rupp Portfolio"
+
+about: 
+  template: jolla
+  links:
+    - icon: linkedin
+      text: LinkedIn
+      href: https://www.linkedin.com/in/vincentrupp1/
+    - icon: envelope
+      text: Contact me
+      href: mailto:vjrupp49@gmail.com
+
+listing:
+  contents: posts
+  sort: "date desc"
+  type: default
+  fields: [title, date]
+  
+page-layout: full
+title-block-banner: true
+---
